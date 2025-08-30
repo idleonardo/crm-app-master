@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log("Hola Mundo")
+
     const user = await prisma.user.findFirst({
       where: { resetToken: token, resetTokenExp: { gt: new Date() } },
     });
