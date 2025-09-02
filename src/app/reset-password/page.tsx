@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  const token = searchParams.get('token') || '';
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -45,7 +45,6 @@ export default function ResetPasswordPage() {
           showConfirmButton: false,
         });
 
-        // ✅ Redirigir según lo que devuelva el backend
         setTimeout(() => {
           router.push(data.redirect || '/');
         }, 2500);
@@ -135,6 +134,23 @@ export default function ResetPasswordPage() {
             <p className="mt-4 text-xs text-white/60 text-center">
               Después de cambiar tu contraseña podrás iniciar sesión normalmente
             </p>
+
+            <style jsx>{`
+              .glass-card {
+                position: relative;
+                overflow: hidden;
+                background: linear-gradient(
+                  135deg,
+                  rgba(255, 255, 255, 0.03),
+                  rgba(255, 255, 255, 0.01)
+                );
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                box-shadow: 0 10px 30px rgba(2, 6, 23, 0.6);
+                backdrop-filter: blur(12px) saturate(140%);
+                -webkit-backdrop-filter: blur(12px) saturate(140%);
+                color: #fff;
+              }
+            `}</style>
           </form>
         </div>
       </main>
