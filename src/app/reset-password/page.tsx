@@ -22,6 +22,9 @@ export default function ResetPasswordPage() {
     if (newPassword !== confirmPassword) {
       return Swal.fire('Error', 'Las contraseñas no coinciden', 'warning');
     }
+    if (newPassword.length < 6) {
+      return Swal.fire('Error', 'La contraseña debe tener al menos 6 caracteres', 'warning');
+    }
 
     setLoading(true);
     try {
@@ -32,6 +35,7 @@ export default function ResetPasswordPage() {
       });
 
       const data = await res.json();
+
       if (res.ok) {
         Swal.fire({
           icon: 'success',
@@ -41,19 +45,15 @@ export default function ResetPasswordPage() {
           showConfirmButton: false,
         });
 
-        // ✅ Usa el redirect que te manda el backend
-        if (data.redirect) {
-          router.push(data.redirect);
-        } else {
-          router.push('/'); // fallback
-        }
-      }
-
-       else {
+        // ✅ Redirigir según lo que devuelva el backend
+        setTimeout(() => {
+          router.push(data.redirect || '/');
+        }, 2500);
+      } else {
         Swal.fire('Error', data.message || 'Token inválido o expirado', 'error');
       }
     } catch (err) {
-      Swal.fire('Error', 'Error de conexión', 'error');
+      Swal.fire('Error', 'Error de conexión con el servidor', 'error');
     } finally {
       setLoading(false);
     }
@@ -135,35 +135,6 @@ export default function ResetPasswordPage() {
             <p className="mt-4 text-xs text-white/60 text-center">
               Después de cambiar tu contraseña podrás iniciar sesión normalmente
             </p>
-
-            <style jsx>{`
-              .glass-card {
-                position: relative;
-                overflow: hidden;
-                background: linear-gradient(
-                  135deg,
-                  rgba(255, 255, 255, 0.03),
-                  rgba(255, 255, 255, 0.01)
-                );
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                box-shadow: 0 10px 30px rgba(2, 6, 23, 0.6);
-                backdrop-filter: blur(12px) saturate(140%);
-                -webkit-backdrop-filter: blur(12px) saturate(140%);
-                color: #fff;
-              }
-
-              .glass-card::before {
-                content: '';
-                position: absolute;
-                inset: 0;
-                pointer-events: none;
-                background: linear-gradient(
-                  180deg,
-                  rgba(255, 255, 255, 0.02),
-                  rgba(255, 255, 255, 0)
-                );
-              }
-            `}</style>
           </form>
         </div>
       </main>

@@ -8,13 +8,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  clients   Client[]
-  resetToken     String?   
-  resetTokenExp  DateTime?
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  createdAt     DateTime  @default(now())
+  resetToken    String?
+  resetTokenExp DateTime?
+  clients       Client[]
 }
 
 model Client {
