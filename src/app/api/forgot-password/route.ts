@@ -20,7 +20,9 @@ export async function POST(req: Request) {
       data: { resetToken, resetTokenExp },
     });
 
-    const resetLink = `${process.env.NEXT_PUBLIC_URL}/reset-password?token=${resetToken}`;
+    // ✅ fallback: si no existe NEXT_PUBLIC_URL, usamos localhost
+    const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
 
     await sendEmail({
       to: email,
