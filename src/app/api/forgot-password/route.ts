@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     });
 
     // ✅ fallback: si no existe NEXT_PUBLIC_URL, usamos localhost
-    const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_URL || "https://instalaciones-electricas-esime.vercel.app/";
     const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
 
     await sendEmail({
