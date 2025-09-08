@@ -447,7 +447,7 @@ const ConductorCalculator: React.FC = () => {
     pdf.setPage(i);
 
     // Encabezado con logo y título
-    pdf.addImage(logoPng.src, 'PNG', pageWidth - marginRight - 80, 5, 80, 30);
+    pdf.addImage("/logoPng.png", "PNG", pageWidth - marginRight - 80, 5, 80, 30);
     pdf.setFontSize(18);
     pdf.setTextColor(0, 0, 0);
     pdf.text('Cálculo de Conductores Eléctricos', marginLeft, 30);
