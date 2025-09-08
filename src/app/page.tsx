@@ -101,7 +101,7 @@ export default function LoginGlass() {
             <label className="block mb-6">
               <span className="text-sm text-white/80">Contraseña</span>
 
-             <div className='flex items-center gap-2'>
+              <div className='flex items-center gap-2'>
                 <input
                   type={showPassword ? 'text' : 'password'} 
                   id='password'
@@ -111,20 +111,10 @@ export default function LoginGlass() {
                   className="mt-2 w-full px-4 py-3 rounded-lg bg-white/6 border border-white/8 placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   placeholder="••••••••"
                 />
-                <div
-                  className='bg-white/5 p-3 mt-2 rounded-lg cursor-pointer hover:bg-white/10 transition'
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  <Image
-                    src={showPassword ? "/invisible.png" : "/ojo.png"}
-                    alt="Ver/Ocultar contraseña"
-                    width={30}
-                    height={30}
-                  />
+                <div className='bg-white/5 p-3 mt-2 rounded-lg cursor-pointer hover:bg-white/10 transition' onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPassword(!showPassword)}>
+                  <Image src={ showPassword ? "/invisible.png" : "/ojo.png" } alt="Ver/Ocultar contraseña" width={30} height={30} />
                 </div>
               </div>
-
                 
               {errors.password && (
                 <p id="password-error" className="text-xs text-rose-400 mt-1">
