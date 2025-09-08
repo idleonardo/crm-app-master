@@ -37,7 +37,7 @@ interface Inputs {
   H: number;
   RCL: number;
   RCT: number;
-  RCS: number;
+  RCP: number;
   S: number;
 }
 
@@ -104,7 +104,7 @@ const CavityMethodCalculator: React.FC = () => {
     H: 0,
     RCL: 0,
     RCT: 0,
-    RCS: 0,
+    RCP: 0,
     S: 0
   });
 
@@ -128,19 +128,20 @@ const CavityMethodCalculator: React.FC = () => {
     // Calcular H (altura de cavidad del local)
     const H = alturaTotal - planoTrabajo - Ht;
     
-    // Fórmula CORRECTA: RCL = (5 * H * (largo + ancho)) / (largo * ancho)
-    const RCL = (5 * H * (largo + ancho)) / (largo * ancho);
-    
-    // RCT = (5 * Ht * (largo + ancho)) / (largo * ancho)
-    const RCT = (5 * Ht * (largo + ancho)) / (largo * ancho);
-    
-    // RCS = (5 * Hs * (largo + ancho)) / (largo * ancho)
-    const RCS = (5 * Hs * (largo + ancho)) / (largo * ancho);
+  // Relación cavidad local (RCL)
+  const RCL = (5 * H * (largo + ancho)) / (largo * ancho);
+
+  // Relación cavidad techo (RCT = RCL * (Ht / H))
+  const RCT = RCL * (Ht / H);
+
+  // Relación cavidad suelo (RCP = RCL * (Hs / H))
+  const RCP = RCL * (Hs / H);
+
     
     // Calcular área
     const S = largo * ancho;
     
-    return { H, RCL, RCT, RCS, S };
+    return { H, RCL, RCT, RCP, S };
   };
 
   // Calcular CU por interpolación (Paso 2)
@@ -182,13 +183,13 @@ const CavityMethodCalculator: React.FC = () => {
   const avanzarPaso = () => {
     if (pasoActual === 1) {
       // Calcular relaciones de cavidad
-      const { H, RCL, RCT, RCS, S } = calcularRelacionesCavidad();
+      const { H, RCL, RCT, RCP, S } = calcularRelacionesCavidad();
       setInputs(prev => ({ 
         ...prev, 
         H, 
         RCL: parseFloat(RCL.toFixed(4)), // Mayor precisión
         RCT: parseFloat(RCT.toFixed(4)), // Mayor precisión
-        RCS: parseFloat(RCS.toFixed(4)), // Mayor precisión
+        RCP: parseFloat(RCP.toFixed(4)), // Mayor precisión
         S,
         rclX: parseFloat(RCL.toFixed(4)) // Actualizar RCL para interpolación
       }));
@@ -521,7 +522,7 @@ const CavityMethodCalculator: React.FC = () => {
               { label: "Altura cavidad local (H):", value: `${inputs.H.toFixed(3)} m` },
               { label: "Relación cavidad local (RCL):", value: inputs.RCL.toFixed(3) },
               { label: "Relación cavidad techo (RCT):", value: inputs.RCT.toFixed(3) },
-              { label: "Relación cavidad suelo (RCS):", value: inputs.RCS.toFixed(3) },
+              { label: "Relación cavidad suelo (RCP):", value: inputs.RCP.toFixed(3) },
             ].map((item, index) => (
               <motion.div 
                 key={index} 
@@ -540,8 +541,9 @@ const CavityMethodCalculator: React.FC = () => {
             <div className="space-y-2">
               <FormulaBlock math="H = H_{\text{total}} - PT - HT" />
               <FormulaBlock math="RCL = \frac{5 \times H \times (Largo + Ancho)}{Largo \times Ancho}" />
-              <FormulaBlock math="RCT = \frac{5 \times HT \times (Largo + Ancho)}{Largo \times Ancho}" />
-              <FormulaBlock math="RCS = \frac{5 \times HS \times (Largo + Ancho)}{Largo \times Ancho}" />
+              <FormulaBlock math="RCT = RCL \cdot \left(\frac{HT}{H}\right)" />
+              <FormulaBlock math="RCP = RCL \cdot \left(\frac{HS}{H}\right)" />
+
             </div>
           </motion.div>
         </motion.div>
@@ -587,12 +589,17 @@ const CavityMethodCalculator: React.FC = () => {
           <h4 className="font-semibold text-white mb-3">Fórmulas completas utilizadas:</h4>
           
           <div className="space-y-4">
+           
             <div>
               <p className="text-sm text-white/70 mb-2">Cálculo de relaciones de cavidad:</p>
               <FormulaBlock math="H = H_{\text{total}} - PT - HT" />
               <FormulaBlock math={`H = ${inputs.alturaTotal} - ${inputs.planoTrabajo} - ${inputs.Ht} = ${inputs.H.toFixed(3)}`} />
               <FormulaBlock math="RCL = \frac{5 \times H \times (Largo + Ancho)}{Largo \times Ancho}" />
               <FormulaBlock math={`RCL = \\frac{5 \\times ${inputs.H.toFixed(3)} \\times (${inputs.largo} + ${inputs.ancho})}{${inputs.largo} \\times ${inputs.ancho}} = ${inputs.RCL.toFixed(3)}`} />
+              <FormulaBlock math="RCT = RCL \times \frac{HT}{H}" />
+              <FormulaBlock math={`RCT = ${inputs.RCL.toFixed(3)} \\times \\frac{${inputs.Ht}}{${inputs.H.toFixed(3)}} = ${inputs.RCT.toFixed(3)}`} />
+              <FormulaBlock math="RCP = RCL \times \frac{HS}{H}" />
+              <FormulaBlock math={`RCP = ${inputs.RCL.toFixed(3)} \\times \\frac{${inputs.Hs}}{${inputs.H.toFixed(3)}} = ${inputs.RCP.toFixed(3)}`} />
             </div>
             
             <div>
