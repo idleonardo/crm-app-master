@@ -20,7 +20,6 @@ import { BlockMath } from 'react-katex';
 import { jsPDF } from 'jspdf';
 import { toPng } from 'html-to-image';
 import katex from 'katex';
-import logoPng from '../../../assets/logoPng.png';
 import { c } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
 import Image from 'next/image';
 
