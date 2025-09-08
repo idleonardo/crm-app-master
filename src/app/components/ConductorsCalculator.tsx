@@ -22,6 +22,9 @@ import { toPng } from 'html-to-image';
 import katex from 'katex';
 import logoPng from '../../../assets/logoPng.png';
 import { c } from 'node_modules/framer-motion/dist/types.d-Cjd591yU';
+import Image from 'next/image';
+
+<Image src={logoPng} alt="Logo" width={100} height={100} />
 
 // Tipado de resultados de cálculo
 interface CurrentResult {
