@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Calculadoras
 import CavityMethodCalculator from '../components/CavityMethodCalculator';
@@ -124,20 +125,26 @@ export default function HomeApp() {
             ))}
           </div>
 
-          {/* Renderizado condicional */}
+          {/* Renderizado condicional dinámico con animación */}
           <div className="mt-8">
-            {tools.map(
-              (tool) =>
-                selectedTool === tool.id &&
-                tool.component && (
-                  <div
-                    key={tool.id}
-                    className="p-4 rounded-xl bg-slate-900/50 border border-slate-700"
-                  >
-                    {tool.component}
-                  </div>
-                )
-            )}
+            <AnimatePresence mode="wait">
+              {tools.map(
+                (tool) =>
+                  selectedTool === tool.id &&
+                  tool.component && (
+                    <motion.div
+                      key={tool.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.4 }}
+                      className="p-4 rounded-xl bg-slate-900/50 border border-slate-700"
+                    >
+                      {tool.component}
+                    </motion.div>
+                  )
+              )}
+            </AnimatePresence>
 
             {!selectedTool && (
               <p className="text-center text-white/60 text-sm">

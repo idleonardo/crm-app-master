@@ -5,6 +5,10 @@ import { motion } from "framer-motion";
 import { Calculator, Trash2, Download, Upload, Save, History, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { BlockMath, InlineMath } from "react-katex";
 import "katex/dist/katex.min.css";
+import { jsPDF } from "jspdf";
+import { toPng } from "html-to-image";
+import katex from "katex";
+import Image from 'next/image';
 
 // ===== Types =====
 
@@ -157,6 +161,251 @@ function calcularResultados(inp: Inputs): Resultados {
 function fmtPercent(x: number) {
   return `${round(100 * x, 2)}%`;
 }
+
+// Helper para traer imágenes de /public como base64
+const fetchImageAsBase64 = async (path: string): Promise<string | null> => {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = await res.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.byteLength; i++)
+      binary += String.fromCharCode(bytes[i]);
+    return `data:image/png;base64,${btoa(binary)}`;
+  } catch {
+    return null; // fallback: sin logo
+  }
+};
+
+
+const exportResultsToPDF = async (inputs: Inputs, resultados: Resultados) => {
+  const pdf = new jsPDF("p", "mm", "letter");
+
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 40;
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const usableWidth = pageWidth - marginLeft - marginRight;
+  let y = marginTop;
+
+  const esIndirecto =
+    inputs.sistema === "Indirecto" || inputs.sistema === "Semi-indirecto";
+
+  
+    // Cargar logo en base64
+  const logoBase64 = await fetchImageAsBase64("/logoPng.png");
+
+  // === Encabezado y pie en todas las páginas ===
+  const renderHeaderFooter = (page: number, totalPages: number) => {
+    pdf.setPage(page);
+    if (logoBase64) {
+    pdf.addImage(logoBase64, "PNG", pageWidth - 70, 8, 50, 22);
+    }
+
+    pdf.setFontSize(18);
+    pdf.text("Cálculo de Iluminación - Método del Flujo Total", marginLeft, 25);
+    pdf.setDrawColor(100);
+    pdf.line(marginLeft, 30, pageWidth - marginRight, 30);
+
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text(
+      `Página ${page} de ${totalPages}`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: "center" }
+    );
+  };
+
+  // Helper para renderizar fórmulas KaTeX como imágenes
+const addKatex = async (formula: string) => {
+  const temp = document.createElement("div");
+  temp.style.display = "inline-block";
+  temp.style.background = "white";        // fondo blanco para el PNG
+  temp.className = "pdf-scope";           // scope para el CSS inyectado
+
+  // 1) Render KaTeX
+  temp.innerHTML = katex.renderToString(formula, {
+    throwOnError: false,
+    displayMode: true,
+  });
+
+  // 2) Inyecta estilos NEGROS con mayor precedencia
+  const style = document.createElement("style");
+  style.textContent = `
+    .pdf-scope .katex,
+    .pdf-scope .katex .mathnormal,
+    .pdf-scope .katex .mord,
+    .pdf-scope .katex .mfrac,
+    .pdf-scope .katex .msqrt,
+    .pdf-scope .katex .mroot {
+      color: #000 !important;
+    }
+  `;
+  temp.appendChild(style);
+
+  // 3) Agrega al DOM, rasteriza y limpia
+  document.body.appendChild(temp);
+  await new Promise((r) => requestAnimationFrame(r));
+
+  const imgData = await toPng(temp, { pixelRatio: 3, cacheBust: true });
+  document.body.removeChild(temp);
+
+  const desiredWidth = (pdf.internal.pageSize.getWidth() - 15 - 15) * 0.45;
+  // @ts-ignore
+  const imgProps = pdf.getImageProperties(imgData);
+  const imgHeight = (imgProps.height * desiredWidth) / imgProps.width;
+
+  if (y + imgHeight > pdf.internal.pageSize.getHeight() - 20) {
+    pdf.addPage();
+    y = 40; // mismo top que usas
+  }
+  pdf.addImage(imgData, "PNG", 15, y, desiredWidth, imgHeight);
+  y += imgHeight + 6;
+};
+
+
+  // === Datos de entrada ===
+  pdf.setFontSize(14);
+  pdf.text("Datos de Entrada", marginLeft, y);
+  y += 6;
+  pdf.setFontSize(11);
+  [
+    `Sistema: ${inputs.sistema}`,
+    `Dimensiones: ${inputs.largo} m × ${inputs.ancho} m`,
+    `Altura total: ${inputs.alturaTotal} m`,
+    `Plano de trabajo: ${inputs.alturaPlanoTrabajo} m`,
+    `Suspensión: ${inputs.alturaSuspension} m`,
+    `Nivel de iluminación (E): ${inputs.nivelIluminacion} lux`,
+    `FPT: ${inputs.FPT}`,
+    `Tipo de lámpara: ${inputs.tipoLampara}`,
+    `Flujo por luminaria: ${inputs.flujoPorLuminaria} lm`,
+    `K1=${inputs.rclX1}, CU1=${inputs.cuY1}`,
+    `K2=${inputs.rclX2}, CU2=${inputs.cuY2}`,
+  ].forEach((line) => {
+    pdf.text(`• ${line}`, marginLeft + 2, y);
+    y += 6;
+  });
+
+  // === Resultados ===
+  y += 6;
+  pdf.setFontSize(14);
+  pdf.text("Resultados", marginLeft, y);
+  y += 6;
+  pdf.setFontSize(11);
+  [
+    `Área S: ${resultados.areaS.toFixed(2)} m²`,
+    `Altura de cálculo: ${resultados.alturaCalculo.toFixed(2)} m`,
+    `Índice del local (K): ${resultados.indiceLocalK.toFixed(3)}`,
+    `Coeficiente de utilización (CU): ${resultados.CU.toFixed(3)}`,
+    `Flujo total requerido: ${resultados.flujoTotal.toFixed(2)} lm`,
+    `Número de luminarias: ${resultados.numeroLuminarias}`,
+    `Distribución: ${resultados.emplazamiento.nAncho} × ${
+      resultados.emplazamiento.nLargo
+    } = ${
+      resultados.emplazamiento.nAncho * resultados.emplazamiento.nLargo
+    } luminarias`,
+  ].forEach((line) => {
+    pdf.text(`• ${line}`, marginLeft + 2, y);
+    y += 6;
+  });
+
+  // === Fórmulas simbólicas ===
+  y += 8;
+  pdf.setFontSize(14);
+  pdf.text("Fórmulas utilizadas", marginLeft, y);
+  y += 8;
+
+  const formulas = [
+    "S = a \\cdot b "  ,
+    esIndirecto
+      ? "H = H_{total} - H_{pT}"
+      : "h = H_{total} - H_{pT} - H_{susp}",
+    esIndirecto
+      ? "K = \\frac{3ab}{2H(a+b)}"
+      : "K = \\frac{ab}{h(a+b)}",
+    "CU = CU_1 + \\frac{(K-K_1)(CU_2-CU_1)}{K_2-K_1}",
+    "\\Phi_{tot} = \\frac{E \\cdot S}{CU \\cdot FPT}",
+    "N = \\frac{\\Phi_{tot}}{\\Phi_l}",
+    "N_{ancho} = \\sqrt{a \\cdot \\frac{N}{b}}",
+    "N_{largo} = N_{ancho} \\cdot \\frac{b}{a}",
+  ];
+
+  for (const f of formulas) {
+    await addKatex(f);
+  }
+
+  // === Fórmulas con valores sustituidos ===
+  y += 6;
+  pdf.setFontSize(14);
+  pdf.text("Fórmulas desarrolladas", marginLeft, y);
+  y += 8;
+
+  const withValues  = [
+    `S = ${inputs.ancho} \\cdot ${inputs.largo} = ${resultados.areaS.toFixed(
+      2
+    )}\\,m^2`,
+    esIndirecto
+      ? `H = ${inputs.alturaTotal} - ${inputs.alturaPlanoTrabajo} = ${resultados.alturaCalculo.toFixed(
+          2
+        )}\\,m`
+      : `h = ${inputs.alturaTotal} - ${inputs.alturaPlanoTrabajo} - ${
+          inputs.alturaSuspension
+        } = ${resultados.alturaCalculo.toFixed(2)}\\,m`,
+    esIndirecto
+      ? `K = \\frac{3 \\cdot ${inputs.ancho} \\cdot ${inputs.largo}}{2 \\cdot ${
+          resultados.alturaCalculo
+        } \\cdot (${inputs.ancho}+${inputs.largo})} = ${resultados.indiceLocalK.toFixed(
+          3
+        )}`
+      : `K = \\frac{${inputs.ancho} \\cdot ${inputs.largo}}{${
+          resultados.alturaCalculo
+        } \\cdot (${inputs.ancho}+${inputs.largo})} = ${resultados.indiceLocalK.toFixed(
+          3
+        )}`,
+    `CU = ${inputs.cuY1} + \\frac{(${resultados.indiceLocalK.toFixed(
+      3
+    )}-${inputs.rclX1})(${inputs.cuY2}-${inputs.cuY1})}{${inputs.rclX2}-${
+      inputs.rclX1
+    }} = ${resultados.CU.toFixed(3)}`,
+    `\\Phi_{tot} = \\frac{${inputs.nivelIluminacion} \\cdot ${
+      resultados.areaS
+    }}{${resultados.CU.toFixed(3)} \\cdot ${
+      inputs.FPT
+    }} = ${resultados.flujoTotal.toFixed(2)}\\,lm`,
+    `N = \\frac{${resultados.flujoTotal.toFixed(2)}}{${
+      inputs.flujoPorLuminaria
+    }} = ${resultados.numeroLuminariasExacto.toFixed(
+      2
+    )} \\Rightarrow ${resultados.numeroLuminarias}`,
+    `N_{ancho} = \\sqrt{${inputs.ancho} \\cdot \\frac{${
+      resultados.numeroLuminariasExacto.toFixed(2)
+    }}{${inputs.largo}}} = ${resultados.emplazamiento.nAnchoExacto.toFixed(
+      2
+    )} \\Rightarrow ${resultados.emplazamiento.nAncho}`,
+    `N_{largo} = ${resultados.emplazamiento.nAnchoExacto.toFixed(
+      2
+    )} \\cdot \\frac{${inputs.largo}}{${inputs.ancho}} = ${resultados.emplazamiento.nLargoExacto.toFixed(
+      2
+    )} \\Rightarrow ${resultados.emplazamiento.nLargo}`,
+  ];
+
+  for (const f of withValues) {
+    await addKatex(f);
+  }
+
+  // === Encabezado y pie de página en todas las páginas ===
+  const totalPages = (pdf as any).internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    renderHeaderFooter(i, totalPages);
+  }
+
+  window.open(pdf.output("bloburl"), "_blank");
+};
+
+
 
 // ===== Component =====
 
@@ -596,6 +845,14 @@ export default function CavityMethodLightingApp() {
             >
               <Save className="h-5 w-5" /> Guardar resultados
             </button>
+
+            <button
+              onClick={() => exportResultsToPDF(inputs, resultados)}
+              className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 mt-2"
+            >
+              <Download className="h-5 w-5" /> Exportar PDF
+            </button>
+
           </div>
         </motion.div>
       ) : (

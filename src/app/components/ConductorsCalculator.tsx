@@ -311,194 +311,172 @@ const ConductorCalculator: React.FC = () => {
     return `${poles} X ${last.ampere}A (máximo disponible)`;
   };
 
-    const exportResultsToPDF = async () => {
-  if (!result) return;
+        const exportResultsToPDF = async () => {
+      if (!result) return;
 
-  // Abre la pestaña *antes* de cualquier await para no romper el gesto de usuario
-  const newTab = window.open('', '_blank');
+      // Helper para traer imágenes de /public como base64
+      const fetchImageAsBase64 = async (path: string): Promise<string | null> => {
+        try {
+          const res = await fetch(path);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          let binary = '';
+          const bytes = new Uint8Array(buf);
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+          return btoa(binary);
+        } catch {
+          return null; // fallback: sin logo
+        }
+      };
 
-  // Helper para traer imágenes de /public como base64
-  const fetchImageAsBase64 = async (path: string): Promise<string | null> => {
-    try {
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf = await res.arrayBuffer();
-      let binary = '';
-      const bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      return btoa(binary);
-    } catch {
-      return null; // fallback: sin logo
-    }
-  };
+      // Carga el logo
+      const logoBase64 = await fetchImageAsBase64('/logoPng.png');
 
-  // Carga el logo (si no está, seguimos sin romper)
-  const logoBase64 = await fetchImageAsBase64('/logoPng.png');
+      // Inicializa PDF
+      const pdf = new jsPDF('p', 'mm', 'letter');
+      const marginLeft = 15;
+      const marginRight = 15;
+      const marginTop = 40; // espacio para encabezado
+      let y = marginTop;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const usableWidth = pageWidth - marginRight - marginLeft;
 
-  const pdf = new jsPDF('p', 'mm', 'letter');
-  const marginLeft = 15;
-  const marginRight = 15;
-  const marginTop = 40; // espacio para encabezado
-  let y = marginTop;
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const usableWidth = pageWidth - marginRight - marginLeft;
+      // === Fecha ===
+      pdf.setFontSize(10);
+      pdf.text(`Fecha: ${new Date().toLocaleString()}`, marginLeft, y);
+      y += 12;
 
-  // === Fecha ===
-  pdf.setFontSize(10);
-  pdf.text(`Fecha: ${new Date().toLocaleString()}`, marginLeft, y);
-  y += 12;
+      // === Datos de entrada ===
+      pdf.setFontSize(14);
+      pdf.text('Datos de entrada', marginLeft, y);
+      y += 2;
+      pdf.setDrawColor(100);
+      pdf.setLineWidth(0.3);
+      pdf.line(marginLeft, y, pageWidth - marginRight, y);
+      y += 4;
 
-  // === Datos de entrada ===
-  pdf.setFontSize(14);
-  pdf.text('Datos de entrada', marginLeft, y);
-  y += 2;
-  pdf.setDrawColor(100);
-  pdf.setLineWidth(0.3);
-  pdf.line(marginLeft, y, pageWidth - marginRight, y);
-  y += 4;
+      pdf.setFontSize(11);
+      const entradas = [
+        `Sistema: ${
+          result.systemType === 'monofasico'
+            ? 'Monofásico a 2 Hilos'
+            : result.systemType === 'bifasico'
+            ? 'Monofásico a 3 Hilos/Bifásico'
+            : 'Trifásico a 3 Hilos'
+        }`,
+        `Potencia total (Wtot): ${result.power} W`,
+        `Tensión (En): ${result.voltage} V`,
+        `Factor de potencia (Cosθ): ${result.powerFactor}`,
+        `Factor de demanda (FD): ${result.demandFactor}`,
+        `Tipo de aislamiento: ${result.insulationType}`,
+        `Material de conductores: ${result.conductorType === 'cables' ? 'Cables' : 'Alambres'}`,
+        `Tipo de instalación: ${result.installationType === 'interior' ? 'Interior' : 'Intemperie'}`,
+        `Número de conductores: ${result.numberOfConductors}`,
+        `Tipo de tubería: ${result.conduitType.replace(/_/g, ' ')}`,
+      ];
+      entradas.forEach((line) => {
+        pdf.text(`• ${line}`, marginLeft + 2, y);
+        y += 6;
+      });
 
-  pdf.setFontSize(11);
-  const entradas = [
-    `Sistema: ${
-      result.systemType === 'monofasico'
-        ? 'Monofásico a 2 Hilos'
-        : result.systemType === 'bifasico'
-        ? 'Monofásico a 3 Hilos/Bifásico'
-        : 'Trifásico a 3 Hilos'
-    }`,
-    `Potencia total (Wtot): ${result.power} W`,
-    `Tensión (En): ${result.voltage} V`,
-    `Factor de potencia (Cosθ): ${result.powerFactor}`,
-    `Factor de demanda (FD): ${result.demandFactor}`,
-    `Tipo de aislamiento: ${result.insulationType}`,
-    `Material de conductores: ${result.conductorType === 'cables' ? 'Cables' : 'Alambres'}`,
-    `Tipo de instalación: ${result.installationType === 'interior' ? 'Interior' : 'Intemperie'}`,
-    `Número de conductores: ${result.numberOfConductors}`,
-    `Tipo de tubería: ${result.conduitType.replace(/_/g, ' ')}`
-  ];
-  entradas.forEach((line) => {
-    pdf.text(`• ${line}`, marginLeft + 2, y);
-    y += 6;
-  });
+      // === Resultados ===
+      y += 4;
+      pdf.setFontSize(14);
+      pdf.text('Resultados', marginLeft, y);
+      y += 2;
+      pdf.setLineWidth(0.3);
+      pdf.line(marginLeft, y, pageWidth - marginRight, y);
+      y += 4;
 
-  // === Resultados ===
-  y += 4;
-  pdf.setFontSize(14);
-  pdf.text('Resultados', marginLeft, y);
-  y += 2;
-  pdf.setLineWidth(0.3);
-  pdf.line(marginLeft, y, pageWidth - marginRight, y);
-  y += 4;
-
-  pdf.setFontSize(11);
-  const resultados: string[] = [
-    `Corriente (I): ${result.current.toFixed(2)} A`,
-    `Corriente corregida (Ic): ${result.correctedCurrent.toFixed(2)} A`
-  ];
-  if (result.method === 'current') {
-    resultados.push(`Corriente de protección (Ip): ${(result as any).protectionCurrent.toFixed(2)} A`);
-  } else {
-    resultados.push(`Sección del conductor (S): ${(result as any).section.toFixed(2)} mm²`);
-  }
-  resultados.push(
-    `Calibre AWG recomendado: ${result.awg}`,
-    `Área total conductores: ${result.conductorArea.toFixed(2)} mm²`,
-    `Tubería recomendada: ${result.conduitSize}`,
-    `Interruptor termomagnético: ${result.circuitBreaker}`
-  );
-  resultados.forEach((line) => {
-    pdf.text(`• ${line}`, marginLeft + 2, y);
-    y += 6;
-  });
-
-  // === Fórmulas (KaTeX -> PNG -> addImage) ===
-  if (formulaSteps.length > 0) {
-    y += 4;
-    pdf.setFontSize(14);
-    pdf.text('Desarrollo de las fórmulas', marginLeft, y);
-    y += 2;
-    pdf.line(marginLeft, y, pageWidth - marginRight, y);
-    y += 6;
-
-    for (const step of formulaSteps) {
-      const temp = document.createElement('div');
-      temp.style.display = 'inline-block';
-      temp.style.background = 'white';
-      temp.innerHTML = katex.renderToString(step, { throwOnError: false, displayMode: true });
-      document.body.appendChild(temp);
-
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const dataUrl = await toPng(temp, { pixelRatio: 4 });
-      document.body.removeChild(temp);
-
-      const desiredWidth = usableWidth * 0.3;
-      const imgProps = (pdf as any).getImageProperties(dataUrl);
-      const imgHeight = (imgProps.height * desiredWidth) / imgProps.width;
-
-      if (y + imgHeight > pdf.internal.pageSize.getHeight() - 20) {
-        pdf.addPage();
-        y = marginTop;
+      pdf.setFontSize(11);
+      const resultados: string[] = [
+        `Corriente (I): ${result.current.toFixed(2)} A`,
+        `Corriente corregida (Ic): ${result.correctedCurrent.toFixed(2)} A`,
+      ];
+      if (result.method === 'current') {
+        resultados.push(`Corriente de protección (Ip): ${(result as any).protectionCurrent.toFixed(2)} A`);
+      } else {
+        resultados.push(`Sección del conductor (S): ${(result as any).section.toFixed(2)} mm²`);
       }
-      pdf.addImage(dataUrl, 'PNG', marginLeft, y, desiredWidth, imgHeight);
-      y += imgHeight + 8;
-    }
-  }
+      resultados.push(
+        `Calibre AWG recomendado: ${result.awg}`,
+        `Área total conductores: ${result.conductorArea.toFixed(2)} mm²`,
+        `Tubería recomendada: ${result.conduitSize}`,
+        `Interruptor termomagnético: ${result.circuitBreaker}`
+      );
+      resultados.forEach((line) => {
+        pdf.text(`• ${line}`, marginLeft + 2, y);
+        y += 6;
+      });
 
-  // === Nota final ===
-  y += 4;
-  const noteText =
-    result.method === 'current'
-      ? 'Nota: Este cálculo determina la corriente y protección necesaria. Para dimensionamiento completo del conductor, considera también la caída de tensión.'
-      : 'Nota: Este cálculo considera la caída de tensión máxima permitida. Verifica también la capacidad de corriente del conductor seleccionado.';
-  const noteHeight = 16;
-  pdf.setFillColor(245, 245, 245);
-  pdf.rect(marginLeft, y - 2, usableWidth, noteHeight, 'F');
-  pdf.setTextColor(200, 0, 0);
-  pdf.setFontSize(12);
-  pdf.text(noteText, marginLeft + 2, y + 4, { maxWidth: usableWidth - 4 });
+      // === Fórmulas desde contenedor oculto ===
+      const nodes = Array.from(document.querySelectorAll('#pdf-formulas .katex')) as HTMLElement[];
+      if (nodes.length > 0) {
+        y += 4;
+        pdf.setFontSize(14);
+        pdf.text('Desarrollo de las fórmulas', marginLeft, y);
+        y += 2;
+        pdf.line(marginLeft, y, pageWidth - marginRight, y);
+        y += 6;
 
-  // === Encabezado (logo + título) y numeración en TODAS las páginas ===
-  const totalPages = (pdf as any).internal.pages.length - 1;
-  for (let i = 1; i <= totalPages; i++) {
-    pdf.setPage(i);
+        for (const node of nodes) {
+          const dataUrl = await toPng(node, { pixelRatio: 3, backgroundColor: '#ffffff' });
 
-    // Encabezado con logo (si está disponible)
-    if (logoBase64) {
-      pdf.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', pageWidth - marginRight - 80, 5, 80, 30);
-    }
-    pdf.setFontSize(18);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text('Cálculo de Conductores Eléctricos', marginLeft, 30);
-    pdf.setDrawColor(100);
-    pdf.line(marginLeft, 35, pageWidth - marginRight, 35);
+          const desiredWidth = usableWidth * 0.35;
+          // @ts-ignore
+          const imgProps = pdf.getImageProperties(dataUrl);
+          const imgHeight = (imgProps.height * desiredWidth) / imgProps.width;
 
-    // Numeración al pie
-    const pHeight = pdf.internal.pageSize.getHeight();
-    pdf.setFontSize(10);
-    pdf.setTextColor(100);
-    pdf.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pHeight - 10, { align: 'center' });
-  }
+          if (y + imgHeight > pdf.internal.pageSize.getHeight() - 20) {
+            pdf.addPage();
+            y = marginTop;
+          }
 
-  // === Abrir en NUEVA PESTAÑA (compatible con Vercel) ===
-  const blob = pdf.output('blob');
-  const blobUrl = URL.createObjectURL(blob);
+          pdf.addImage(dataUrl, 'PNG', marginLeft, y, desiredWidth, imgHeight);
+          y += imgHeight + 8;
+        }
+      }
 
-  if (newTab) {
-    // Usamos la pestaña que abrimos al inicio (no la bloquea el navegador)
-    newTab.location.href = blobUrl;
-  } else {
-    // Fallback por si el navegador bloqueó newTab
-    const win = window.open(blobUrl, '_blank');
-    if (!win) {
-      // Último fallback: descarga directa
-      pdf.save('calculo_conductores.pdf');
-    }
-  }
+      // === Encabezado y numeración en TODAS las páginas ===
+      const totalPages = (pdf as any).internal.pages.length - 1;
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
 
-  // Limpia el blob cuando ya no se use
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-};
+        if (logoBase64) {
+        const logoWidth = 50;  // mm
+        const logoHeight = 25; // mm
+        const xRight = pageWidth - marginRight - logoWidth; // lado derecho
+        const yTop = 5;
 
+        pdf.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', xRight, yTop, logoWidth, logoHeight);
+
+        }
+
+        pdf.setFontSize(18);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('Cálculo de Conductores Eléctricos', pageWidth / 2, 20, { align: 'right' });
+
+        pdf.setDrawColor(100);
+        pdf.line(marginLeft, 32, pageWidth - marginRight, 32);
+
+        const pHeight = pdf.internal.pageSize.getHeight();
+        pdf.setFontSize(10);
+        pdf.setTextColor(100);
+        pdf.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pHeight - 10, { align: 'right' });
+      }
+
+      // === Genera el blob y abre al final ===
+      const blob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        // fallback si bloquean el popup
+        pdf.save('calculo_conductores.pdf');
+      }
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    };
 
 
 const calculateTotalConductorArea = (
@@ -946,9 +924,9 @@ const calculateTotalConductorArea = (
 
         
       </div>
-      <div className="mb-6 p-4 bg-slate-900 rounded-lg">
+      <div className="mb-6 p-6 bg-slate-900 rounded-lg">
         <h3 className="text-sm font-medium text-gray-300 mb-2">Fórmulas aplicadas:</h3>
-        <div className="text-xs space-y-1">
+        <div className="text-xl space-y-1">
           {systemType === 'monofasico' && (
             <>
               <BlockMath math="I = \frac{Wtot}{En \times Cos\theta}" />
@@ -998,6 +976,7 @@ const calculateTotalConductorArea = (
                 <button onClick={copyResultsToClipboard} className="text-blue-400 hover:text-blue-300 flex items-center text-xs sm:text-sm" title="Copiar resultados">
                   <Copy size={16} className="mr-1" /> Copiar
                 </button>
+                
                 <button onClick={exportResultsToPDF} className="text-green-400 hover:text-green-300 flex items-center text-xs sm:text-sm" title="Exportar resultados a PDF">
                   <Download size={16} className="mr-1" /> PDF
                 </button>
@@ -1071,6 +1050,28 @@ const calculateTotalConductorArea = (
           <BlockMath key={index} math={step} />
         ))}
       </div>
+
+            {/* Contenedor oculto para fórmulas PDF */}
+      <div
+        id="pdf-formulas"
+        style={{
+          position: "fixed",
+          left: 0,
+          top: 0,
+          opacity: 0,
+          pointerEvents: "none",
+          background: "#fff",
+          color: "#000",
+          zIndex: -1,
+        }}
+      >
+        {formulaSteps.map((step, i) => (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <BlockMath math={step} />
+          </div>
+        ))}
+      </div>
+
     </div>
   );
 };

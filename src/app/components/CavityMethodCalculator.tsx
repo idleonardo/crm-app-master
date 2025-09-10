@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState, ChangeEvent } from 'react';
+import React, { useState, ChangeEvent, useMemo } from 'react';
 import { BlockMath } from 'react-katex';
 import { motion, Variants, Transition } from 'framer-motion';
 import 'katex/dist/katex.min.css';
+import katex from "katex";
+import { toPng } from "html-to-image";
+import html2canvas from "html2canvas";
+import { Save, Download } from "lucide-react";
+import Image from 'next/image';
+import { jsPDF } from "jspdf";
+
 
 interface Inputs {
   // Paso 1: Dimensiones del local
@@ -70,6 +77,179 @@ const formatThreeSigFigs = (num: number): string => {
   
   return rounded.toFixed(decimalPlaces);
 };
+
+const exportCavityPDF = async (
+  inputs: Inputs,
+  resultados: Resultados | null,
+  formulas: string[]
+) => {
+  if (!resultados) return;
+
+  // Helper para traer imágenes de /public como base64
+  const fetchImageAsBase64 = async (path: string): Promise<string | null> => {
+    try {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    } catch {
+      return null; // fallback: sin logo
+    }
+  };
+
+  // Carga el logo
+  const logoBase64 = await fetchImageAsBase64('/logoPng.png');
+
+  const pdf = new jsPDF('p', 'mm', 'letter');
+  const marginLeft = 15;
+  const marginRight = 15;
+  const marginTop = 40; // espacio para encabezado
+  let y = marginTop;
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const usableWidth = pageWidth - marginRight - marginLeft;
+
+  // === Fecha ===
+  pdf.setFontSize(10);
+  pdf.text(`Fecha: ${new Date().toLocaleString()}`, marginLeft, y);
+  y += 12;
+
+  // === Datos de entrada ===
+  pdf.setFontSize(14);
+  pdf.text('Datos de entrada', marginLeft, y);
+  y += 2;
+  pdf.setDrawColor(100);
+  pdf.setLineWidth(0.3);
+  pdf.line(marginLeft, y, pageWidth - marginRight, y);
+  y += 6;
+
+  pdf.setFontSize(11);
+  const entradas = [
+    `Largo: ${inputs.largo} m`,
+    `Ancho: ${inputs.ancho} m`,
+    `Altura total: ${inputs.alturaTotal} m`,
+    `Plano de trabajo: ${inputs.planoTrabajo} m`,
+    `Ht: ${inputs.Ht} m`,
+    `Hs: ${inputs.Hs} m`,
+    `Nivel de iluminación: ${inputs.nivelIluminacion} lux`,
+    `Reflexión techo: ${inputs.reflexionTecho}`,
+    `Reflexión paredes: ${inputs.reflexionParedes}`,
+    `Reflexión piso: ${inputs.reflexionPiso}`,
+    `Flujo luminoso: ${inputs.flujoLuminoso} lm`,
+    `Lámparas/luminaria: ${inputs.lamparasPorLuminaria}`,
+    `FPT: ${inputs.fpt}`,
+  ];
+  entradas.forEach((line) => {
+    pdf.text(`• ${line}`, marginLeft + 2, y);
+    y += 6;
+  });
+
+  // === Resultados ===
+  y += 6;
+  pdf.setFontSize(14);
+  pdf.text('Resultados', marginLeft, y);
+  y += 2;
+  pdf.line(marginLeft, y, pageWidth - marginRight, y);
+  y += 6;
+
+  const resultadosTxt = [
+    `Área (S): ${(inputs.S ?? 0).toFixed(2)} m²`,
+    `Altura útil (H): ${(inputs.H ?? 0).toFixed(3)} m`,
+    `RCL: ${(inputs.RCL ?? 0).toFixed(3)}`,
+    `RCT: ${(inputs.RCT ?? 0).toFixed(3)}`,
+    `RCP: ${(inputs.RCP ?? 0).toFixed(3)}`,
+    `CU: ${(inputs.cu ?? 0).toFixed(4)}`,
+    `N exacto: ${resultados.N}`,
+    `N redondeado: ${resultados.N_redondeado}`,
+    `Distribución: ${resultados.N_ancho_redondeado} × ${resultados.N_largo_redondeado}`,
+  ];
+  resultadosTxt.forEach((line) => {
+    pdf.text(`• ${line}`, marginLeft + 2, y);
+    y += 6;
+  });
+
+  // === Fórmulas ===
+  if (formulas.length > 0) {
+    y += 6;
+    pdf.setFontSize(14);
+    pdf.text('Fórmulas utilizadas', marginLeft, y);
+    y += 2;
+    pdf.line(marginLeft, y, pageWidth - marginRight, y);
+    y += 6;
+
+    for (const step of formulas) {
+      // Crear wrapper con KaTeX y padding extra
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'inline-block';
+      wrapper.style.background = 'white';
+      wrapper.style.color = 'black';
+      wrapper.style.padding = '8px 6px';
+      wrapper.innerHTML = katex.renderToString(step, {
+        throwOnError: false,
+        displayMode: true,
+      });
+      document.body.appendChild(wrapper);
+
+      // Capturar a PNG
+      const dataUrl = await toPng(wrapper, { pixelRatio: 3, backgroundColor: '#fff' });
+      document.body.removeChild(wrapper);
+
+      // Insertar en PDF
+      const desiredWidth = usableWidth * 0.38;
+      // @ts-ignore
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const imgHeight = (imgProps.height * desiredWidth) / imgProps.width;
+
+      if (y + imgHeight > pdf.internal.pageSize.getHeight() - 20) {
+        pdf.addPage();
+        y = marginTop;
+      }
+
+      pdf.addImage(dataUrl, 'PNG', marginLeft, y, desiredWidth, imgHeight);
+      y += imgHeight + 8;
+    }
+  }
+
+  // === Encabezado y numeración en TODAS las páginas ===
+  const totalPages = (pdf as any).internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i);
+
+    // Logo
+    if (logoBase64) {;
+      const logoWidth = 50;
+      const logoHeight = 25;
+      const xRight = pageWidth - marginRight - logoWidth;
+      pdf.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', xRight, 5, logoWidth, logoHeight);
+    }
+
+    // Título centrado
+    pdf.setFontSize(18);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Cálculo por Método de Cavidades', pageWidth / 2, 20, { align: 'right' });
+
+    // Línea separadora
+    pdf.setDrawColor(100);
+    pdf.line(marginLeft, 32, pageWidth - marginRight, 32);
+
+    // Pie de página con numeración
+    const pHeight = pdf.internal.pageSize.getHeight();
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pHeight - 10, { align: 'center' });
+  }
+
+  // === Abrir PDF ===
+  const blob = pdf.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+  const newTab = window.open(blobUrl, '_blank');
+  if (!newTab) {
+    pdf.save('calculo_cavidades.pdf');
+  }
+};
+
 
 const CavityMethodCalculator: React.FC = () => {
   const [inputs, setInputs] = useState<Inputs>({
@@ -587,10 +767,13 @@ const CavityMethodCalculator: React.FC = () => {
           className="mt-6 bg-slate-800/40 p-4 rounded-lg border border-slate-700"
         >
           <h4 className="font-semibold text-white mb-3">Fórmulas completas utilizadas:</h4>
-          
-          <div className="space-y-4">
-           
-            <div>
+          <div className="space-y-6">
+             <div>
+              <p className="text-sm text-white/70 mb-2">Cálculo del área del local:</p>
+              <FormulaBlock math="S = Largo \times Ancho" />
+              <FormulaBlock math={`S = ${inputs.largo} \\times ${inputs.ancho} = ${inputs.S}`} />
+            </div>
+           <div>
               <p className="text-sm text-white/70 mb-2">Cálculo de relaciones de cavidad:</p>
               <FormulaBlock math="H = H_{\text{total}} - PT - HT" />
               <FormulaBlock math={`H = ${inputs.alturaTotal} - ${inputs.planoTrabajo} - ${inputs.Ht} = ${inputs.H.toFixed(3)}`} />
@@ -601,7 +784,13 @@ const CavityMethodCalculator: React.FC = () => {
               <FormulaBlock math="RCP = RCL \times \frac{HS}{H}" />
               <FormulaBlock math={`RCP = ${inputs.RCL.toFixed(3)} \\times \\frac{${inputs.Hs}}{${inputs.H.toFixed(3)}} = ${inputs.RCP.toFixed(3)}`} />
             </div>
-            
+
+            <div>
+              <p className="text-sm text-white/70 mb-2">Cálculo del Coeficiente de Utilización (CU) por interpolación:</p>
+              <FormulaBlock math="Y = Y_1 + \frac{(Y_2 - Y_1)}{(X_2 - X_1)} \times (X - X_1)" />
+              <FormulaBlock math={`Y = ${inputs.cuY1} + \\frac{(${inputs.cuY2} - ${inputs.cuY1})}{(${inputs.rclX2} - ${inputs.rclX1})} \\times (${inputs.rclX.toFixed(3)} - ${inputs.rclX1}) = ${cuCalculado.toFixed(4)}`} />
+            </div>
+
             <div>
               <p className="text-sm text-white/70 mb-2">Cálculo del número de luminarias:</p>
               <FormulaBlock math="N = \frac{E \times S}{\Phi \times L \times CU \times FPT}" />
@@ -615,12 +804,40 @@ const CavityMethodCalculator: React.FC = () => {
               <FormulaBlock math="N_{\text{largo}} = N_{\text{ancho}} \times \frac{Largo}{Ancho}" />
               <FormulaBlock math={`N_{\\text{largo}} = ${resultados.N_ancho} \\times \\frac{${inputs.largo}}{${inputs.ancho}} = ${resultados.N_largo}`} />
             </div>
+
+            <div className="text-xs text-white/50 mt-2">
+              <p className="text-sm text-white/70 mb-2">Emplazamiento de luminarias:</p>
+              <p>Distribución recomendada: {resultados.N_ancho_redondeado} luminarias en el ancho y {resultados.N_largo_redondeado} luminarias en el largo.</p>
+            </div>
           </div>
         </motion.div>
       );
     }
     return null;
   };
+
+
+  const formulas = useMemo<string[]>(() => {
+  return [
+    "H = H_{total} - PT - HT",
+    `H = ${inputs.alturaTotal} - ${inputs.planoTrabajo} - ${inputs.Ht} = ${(inputs.H ?? 0).toFixed(3)}`,
+    "RCL = \\frac{5 \\times H \\times (Largo + Ancho)}{Largo \\times Ancho}",
+    `RCL = \\frac{5 \\times ${(inputs.H ?? 0).toFixed(3)} \\times (${inputs.largo} + ${inputs.ancho})}{${inputs.largo} \\times ${inputs.ancho}} = ${(inputs.RCL ?? 0).toFixed(3)}`,
+    "RCT = RCL \\times \\frac{Ht}{H}",
+    `RCT = ${(inputs.RCL ?? 0).toFixed(3)} \\times \\frac{${inputs.Ht}}{${(inputs.H ?? 0).toFixed(3)}} = ${(inputs.RCT ?? 0).toFixed(3)}`,
+    "RCP = RCL \\times \\frac{Hs}{H}",
+    `RCP = ${(inputs.RCL ?? 0).toFixed(3)} \\times \\frac{${inputs.Hs}}{${(inputs.H ?? 0).toFixed(3)}} = ${(inputs.RCP ?? 0).toFixed(3)}`,
+    "N = \\frac{E \\times S}{\\Phi \\times L \\times CU \\times FPT}",
+    `N = \\frac{${inputs.nivelIluminacion} \\times ${inputs.S}}{${inputs.flujoLuminoso} \\times ${inputs.lamparasPorLuminaria} \\times ${(inputs.cu ?? 0).toFixed(4)} \\times ${inputs.fpt.toFixed(4)}} = ${resultados?.N}`,
+    "N_{ancho} = \\sqrt{\\frac{Ancho \\times N}{Largo}}",
+    `N_{ancho} = \\sqrt{\\frac{${inputs.ancho} \\times ${resultados?.N}}{${inputs.largo}}} = ${resultados?.N_ancho}`,
+    "N_{largo} = N_{ancho} \\times \\frac{Largo}{Ancho}",
+    `N_{largo} = ${resultados?.N_ancho} \\times \\frac{${inputs.largo}}{${inputs.ancho}} = ${resultados?.N_largo}`,
+  ];
+}, [inputs, resultados]);
+
+
+
 
   return (
     <div className="w-full bg-transparent text-white">
@@ -706,6 +923,16 @@ const CavityMethodCalculator: React.FC = () => {
           >
             {pasoActual === 5 ? 'Finalizar' : pasoActual === 4 ? 'Calcular' : 'Siguiente'}
           </motion.button>
+
+          <motion.div className="mt-6 flex flex-col gap-3">
+      <button
+        onClick={() => setMostrarFormulas(!mostrarFormulas)}
+        className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+      >
+        {mostrarFormulas ? "Ocultar" : "Mostrar"} fórmulas completas
+      </button>
+
+    </motion.div>
         </motion.div>
       )}
 
@@ -741,6 +968,46 @@ const CavityMethodCalculator: React.FC = () => {
           }
         }
       `}</style>
+
+        {/* Botón Exportar PDF */}
+<div className="mt-6">
+  <button
+    onClick={() => exportCavityPDF(inputs, resultados, formulas)}
+    className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
+  >
+    <Download className="h-5 w-5" /> Exportar a PDF
+  </button>
+</div>
+
+{/* Contenedor oculto de fórmulas para PDF */}
+<div
+  id="pdf-formulas"
+  style={{
+    position: "fixed",
+    left: 0,
+    top: 0,
+    opacity: 0,
+    pointerEvents: "none",
+    background: "#ffffff",
+    color: "#000000",
+    zIndex: -1,
+  }}
+>
+  <style>{`
+    /* Forzar texto en negro para la exportación */
+    .katex { color: #000 !important; }
+    .katex .mord, .katex .mop, .katex .mfrac,
+    .katex .msqrt, .katex .mroot, .katex .mtable {
+      color: #000 !important;
+    }
+  `}</style>
+
+  {formulas.map((step: string, i: number) => (
+    <div key={i} style={{ marginBottom: 8 }}>
+      <BlockMath math={step} />
+    </div>
+  ))}
+        </div>
     </div>
   );
 };
