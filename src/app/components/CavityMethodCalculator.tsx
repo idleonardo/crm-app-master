@@ -78,6 +78,20 @@ const formatThreeSigFigs = (num: number): string => {
   return rounded.toFixed(decimalPlaces);
 };
 
+// Función para convertir una URL de imagen a Base64
+async function getBase64FromUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+
+
 const exportCavityPDF = async (
   inputs: Inputs,
   resultados: Resultados | null,
