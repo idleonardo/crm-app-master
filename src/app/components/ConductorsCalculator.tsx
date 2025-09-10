@@ -311,6 +311,20 @@ const ConductorCalculator: React.FC = () => {
     return `${poles} X ${last.ampere}A (máximo disponible)`;
   };
 
+        async function getBase64FromUrl(url: string): Promise<string> {
+      const response = await fetch(url);
+      const blob = await response.blob();
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+
+
         const exportResultsToPDF = async () => {
       if (!result) return;
 
@@ -328,9 +342,6 @@ const ConductorCalculator: React.FC = () => {
           return null; // fallback: sin logo
         }
       };
-
-      // Carga el logo
-      const logoBase64 = await fetchImageAsBase64('/logoPng.png');
 
       // Inicializa PDF
       const pdf = new jsPDF('p', 'mm', 'letter');
@@ -437,33 +448,29 @@ const ConductorCalculator: React.FC = () => {
         }
       }
 
-      // === Encabezado y numeración en TODAS las páginas ===
+            // Cargar logo de /public/logo.png como Base64
+      const logoBase64 = await getBase64FromUrl('/logoPng.png');
+
       const totalPages = (pdf as any).internal.pages.length - 1;
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
 
-        if (logoBase64) {
-        const logoWidth = 50;  // mm
-        const logoHeight = 25; // mm
-        const xRight = pageWidth - marginRight - logoWidth; // lado derecho
-        const yTop = 5;
-
-        pdf.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', xRight, yTop, logoWidth, logoHeight);
-
-        }
-
+        // Ahora sí funciona
+        pdf.addImage(logoBase64, 'PNG', pageWidth - marginRight - 80, 5, 80, 30);
         pdf.setFontSize(18);
         pdf.setTextColor(0, 0, 0);
-        pdf.text('Cálculo de Conductores Eléctricos', pageWidth / 2, 20, { align: 'right' });
-
+        pdf.text('Cálculo de Conductores Eléctricos', marginLeft, 30);
         pdf.setDrawColor(100);
-        pdf.line(marginLeft, 32, pageWidth - marginRight, 32);
+        pdf.line(marginLeft, 35, pageWidth - marginRight, 35);
 
+        // Numeración al pie
         const pHeight = pdf.internal.pageSize.getHeight();
         pdf.setFontSize(10);
         pdf.setTextColor(100);
-        pdf.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pHeight - 10, { align: 'right' });
+        pdf.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pHeight - 10, { align: 'center' });
       }
+         
+
 
       // === Genera el blob y abre al final ===
       const blob = pdf.output('blob');
